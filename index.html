@@ -2,7 +2,11 @@
 <html lang="zh-Hant" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tabata 計時器">
+    <meta name="theme-color" content="#090d16">
     <title>Tabata 間歇訓練計時器 | 專業高強度間歇訓練工具</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -59,10 +63,23 @@
         /* Pulse animation during last 3 seconds */
         @keyframes urgentPulse {
             0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.06); }
+            40% { transform: scale(1.12); }
         }
         .urgent-countdown {
-            animation: urgentPulse 0.5s ease-in-out infinite;
+            animation: urgentPulse 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+            text-shadow: 0 0 28px var(--phase-glow);
+        }
+
+        @keyframes ringFlash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
+        .urgent-ring-flash {
+            animation: ringFlash 0.45s ease-in-out infinite;
+        }
+
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
         }
 
         /* Custom Scrollbar */
@@ -96,8 +113,11 @@
 </head>
 <body class="min-h-screen ambient-bg flex flex-col justify-between font-sans antialiased selection:bg-amber-500 selection:text-slate-950">
 
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-2 w-full max-w-md px-4"></div>
+
     <!-- Top Navigation & Status Header -->
-    <header class="w-full max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center justify-between z-10">
+    <header class="w-full max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex flex-wrap items-center justify-between gap-2 z-10">
         <div class="flex items-center gap-3">
             <div id="brandIcon" class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg transition-colors duration-300">
                 <i class="fa-solid fa-fire-flame-curved text-xl"></i>
@@ -106,49 +126,55 @@
                 <h1 class="text-lg sm:text-xl font-black tracking-tight text-white flex items-center gap-2">
                     TABATA <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">PRO</span>
                 </h1>
-                <p class="text-xs text-slate-400 hidden sm:block">高強度間歇訓練計時系統</p>
+                <p class="text-xs text-slate-400 hidden sm:block">支援方案自動儲存 & 倒數 3 秒強效提醒</p>
             </div>
         </div>
 
-        <!-- Audio, Voice & Settings Controls -->
-        <div class="flex items-center gap-2">
-            <!-- Voice Announcement Toggle -->
-            <button id="voiceToggleBtn" onclick="toggleVoice()" title="語音播報開關"
-                class="px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition flex items-center gap-1.5 text-xs sm:text-sm font-medium active:scale-95">
-                <i id="voiceIcon" class="fa-solid fa-microphone-lines text-emerald-400"></i>
-                <span class="hidden md:inline">語音</span>
+        <!-- Audio, Voice & Demo Controls -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+            <!-- 3-2-1 Countdown Sound Test Button -->
+            <button id="testCountdownBtn" onclick="previewThreeSecondCountdown()" title="試聽 3-2-1 倒數提示音（確認 iPhone 音量）"
+                class="px-2.5 sm:px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 transition flex items-center gap-1.5 text-xs sm:text-sm font-bold active:scale-95 shadow-sm">
+                <i class="fa-solid fa-bullhorn text-amber-400"></i>
+                <span>試聽 3-2-1 倒數音</span>
             </button>
 
             <!-- Beep Sound Mute/Unmute Toggle -->
             <button id="muteToggleBtn" onclick="toggleMute()" title="提示音效開關"
-                class="px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition flex items-center gap-1.5 text-xs sm:text-sm font-medium active:scale-95">
-                <i id="muteIcon" class="fa-solid fa-volume-high text-amber-400"></i>
-                <span id="muteText" class="hidden md:inline">音效開啟</span>
+                class="px-2.5 sm:px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700/80 transition flex items-center gap-1.5 text-xs sm:text-sm font-medium active:scale-95">
+                <i id="muteIcon" class="fa-solid fa-bell text-amber-400"></i>
+                <span id="muteText" class="hidden md:inline">提示音開啟</span>
+            </button>
+
+            <!-- Voice Announcement Toggle -->
+            <button id="voiceToggleBtn" onclick="toggleVoice()" title="語音播報開關"
+                class="px-2.5 sm:px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700/80 transition flex items-center gap-1.5 text-xs sm:text-sm font-medium active:scale-95">
+                <i id="voiceIcon" class="fa-solid fa-microphone-lines text-emerald-400"></i>
+                <span class="hidden md:inline">語音</span>
             </button>
 
             <!-- Toggle Settings Drawer Button (Mobile shortcut) -->
             <button id="settingsToggleBtn" onclick="scrollToSettings()" title="訓練設定"
-                class="lg:hidden px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition flex items-center gap-1.5 text-xs sm:text-sm font-medium active:scale-95">
+                class="lg:hidden px-2.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition flex items-center gap-1 text-xs font-medium active:scale-95">
                 <i class="fa-solid fa-sliders text-sky-400"></i>
-                <span>設定</span>
             </button>
         </div>
     </header>
 
     <!-- Main Content Container -->
-    <main class="w-full max-w-5xl mx-auto px-4 sm:px-6 py-2 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+    <main class="w-full max-w-5xl mx-auto px-4 sm:px-6 py-2 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
         <!-- Left / Center Column: Active Timer Display & Controls (7 Cols on Desktop) -->
-        <section class="lg:col-span-7 flex flex-col items-center justify-center bg-slate-900/75 backdrop-blur-xl rounded-3xl p-5 sm:p-7 border border-slate-800/90 phase-border-glow relative overflow-hidden">
+        <section id="timerCardSection" class="lg:col-span-7 flex flex-col items-center justify-center bg-slate-900/75 backdrop-blur-xl rounded-3xl p-5 sm:p-7 border border-slate-800/90 phase-border-glow relative overflow-hidden">
             
             <!-- Top Overall Workout Progress Bar -->
             <div class="w-full mb-4">
                 <div class="flex justify-between items-center text-xs sm:text-sm font-semibold text-slate-400 mb-1.5">
                     <span class="flex items-center gap-1.5">
                         <i class="fa-regular fa-clock text-slate-400"></i>
-                        總剩餘時間：<strong id="totalRemainingDisplay" class="font-mono text-white text-sm sm:text-base">04:10</strong>
+                        總剩餘時間：<strong id="totalRemainingDisplay" class="font-mono tabular-nums text-white text-sm sm:text-base">04:10</strong>
                     </span>
-                    <span id="overallPercentDisplay" class="font-mono text-slate-300">0%</span>
+                    <span id="overallPercentDisplay" class="font-mono tabular-nums text-slate-300">0%</span>
                 </div>
                 <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden p-0.5">
                     <div id="overallProgressBar" class="h-full rounded-full bg-gradient-to-r from-amber-500 via-rose-500 to-emerald-400 transition-all duration-300" style="width: 0%"></div>
@@ -185,9 +211,15 @@
                 </svg>
 
                 <!-- Center Countdown Readout -->
-                <div class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                <div class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-4">
+                    <!-- Dynamic 3-2-1 Urgent Alert Pill -->
+                    <div id="urgentAlertPill" class="hidden mb-1 px-3 py-0.5 rounded-full bg-rose-500/30 border border-rose-400/60 text-rose-200 text-xs font-extrabold tracking-wider uppercase items-center gap-1.5 animate-bounce">
+                        <i class="fa-solid fa-volume-high"></i>
+                        <span id="urgentAlertText">倒數提醒 3</span>
+                    </div>
+
                     <span id="currentPhaseLabelSmall" class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-0.5">PREPARE</span>
-                    <div id="timerDisplay" class="font-mono text-6xl sm:text-7xl font-extrabold tracking-tighter text-white leading-none select-all">
+                    <div id="timerDisplay" class="font-mono tabular-nums text-6xl sm:text-7xl font-extrabold tracking-tighter text-white leading-none select-all transition-transform">
                         00:10
                     </div>
                     <!-- Next Phase Preview Pill -->
@@ -210,7 +242,7 @@
                 <div class="bg-slate-950/70 border border-slate-800/90 rounded-2xl p-3.5 flex items-center justify-between">
                     <div>
                         <p class="text-xs text-slate-400 font-medium">目前循環 (Rounds)</p>
-                        <div class="text-2xl sm:text-3xl font-black font-mono text-white mt-0.5">
+                        <div class="text-2xl sm:text-3xl font-black font-mono tabular-nums text-white mt-0.5">
                             <span id="currentRoundDisplay" class="text-amber-400">1</span>
                             <span class="text-slate-600 text-lg">/</span>
                             <span id="totalRoundsDisplay" class="text-slate-300">8</span>
@@ -224,7 +256,7 @@
                 <div class="bg-slate-950/70 border border-slate-800/90 rounded-2xl p-3.5 flex items-center justify-between">
                     <div>
                         <p class="text-xs text-slate-400 font-medium">目前組數 (Sets)</p>
-                        <div class="text-2xl sm:text-3xl font-black font-mono text-white mt-0.5">
+                        <div class="text-2xl sm:text-3xl font-black font-mono tabular-nums text-white mt-0.5">
                             <span id="currentSetDisplay" class="text-sky-400">1</span>
                             <span class="text-slate-600 text-lg">/</span>
                             <span id="totalSetsDisplay" class="text-slate-300">1</span>
@@ -242,7 +274,7 @@
                 <button id="resetBtn" onclick="resetWorkout()"
                     class="col-span-1 py-3.5 sm:py-4 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-sm sm:text-base border border-slate-700 transition flex flex-col sm:flex-row items-center justify-center gap-1.5 shadow-md">
                     <i class="fa-solid fa-rotate-left"></i>
-                    <span>重設</span>
+                    <span>重置</span>
                 </button>
 
                 <!-- Start / Pause Main Button -->
@@ -263,75 +295,74 @@
             <!-- Keyboard shortcut tip -->
             <p class="text-[11px] text-slate-500 mt-3 hidden sm:flex items-center gap-3">
                 <span><kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700">Space</kbd> 開始/暫停</span>
-                <span><kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700">R</kbd> 重設</span>
+                <span><kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700">R</kbd> 重置</span>
                 <span><kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700">S</kbd> 跳過階段</span>
             </p>
         </section>
 
-        <!-- Right Column: Presets & Custom Parameter Settings (5 Cols on Desktop) -->
-        <aside id="settingsSection" class="lg:col-span-5 flex flex-col gap-5 bg-slate-900/75 backdrop-blur-xl rounded-3xl p-5 sm:p-6 border border-slate-800/90">
+        <!-- Right Column: Editable Presets & Custom Parameter Settings (5 Cols on Desktop) -->
+        <aside id="settingsSection" class="lg:col-span-5 flex flex-col gap-4 bg-slate-900/75 backdrop-blur-xl rounded-3xl p-5 sm:p-6 border border-slate-800/90">
             
-            <!-- Quick Presets Section -->
+            <!-- 1. Editable Presets Section -->
             <div>
-                <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center justify-between mb-2.5">
                     <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                        <i class="fa-solid fa-bolt text-amber-400"></i>
-                        預設方案快速選擇
+                        <i class="fa-solid fa-bookmark text-amber-400"></i>
+                        訓練方案管理
                     </h2>
-                    <span id="activePresetLabel" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        標準 Tabata
-                    </span>
+                    <button onclick="restoreDefaultPresets()" title="將所有方案還原為系統初始值"
+                        class="text-xs font-semibold text-slate-400 hover:text-amber-300 transition flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-slate-800">
+                        <i class="fa-solid fa-arrow-rotate-left"></i>
+                        <span>↺ 還原初始預設</span>
+                    </button>
                 </div>
 
-                <div class="grid grid-cols-3 gap-2.5">
-                    <button onclick="applyPreset('standard')" id="preset-standard"
-                        class="preset-btn p-3 rounded-2xl border border-amber-500/60 bg-amber-500/10 text-left transition hover:bg-slate-800/80 active:scale-95">
-                        <div class="text-xs font-extrabold text-amber-400">標準 Tabata</div>
-                        <div class="text-sm font-mono font-bold text-white mt-0.5">20s / 10s</div>
-                        <div class="text-[11px] text-slate-400 mt-0.5">8 循環 × 1 組</div>
-                    </button>
-
-                    <button onclick="applyPreset('beginner')" id="preset-beginner"
-                        class="preset-btn p-3 rounded-2xl border border-slate-800 bg-slate-950/60 text-left transition hover:bg-slate-800/80 active:scale-95">
-                        <div class="text-xs font-extrabold text-cyan-400">初階入門</div>
-                        <div class="text-sm font-mono font-bold text-white mt-0.5">15s / 15s</div>
-                        <div class="text-[11px] text-slate-400 mt-0.5">6 循環 × 1 組</div>
-                    </button>
-
-                    <button onclick="applyPreset('intense')" id="preset-intense"
-                        class="preset-btn p-3 rounded-2xl border border-slate-800 bg-slate-950/60 text-left transition hover:bg-slate-800/80 active:scale-95">
-                        <div class="text-xs font-extrabold text-rose-400">高強度燃脂</div>
-                        <div class="text-sm font-mono font-bold text-white mt-0.5">30s / 10s</div>
-                        <div class="text-[11px] text-slate-400 mt-0.5">8 循環 × 1 組</div>
-                    </button>
+                <!-- Dynamic Preset Cards Grid -->
+                <div id="presetListContainer" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-0.5">
+                    <!-- Rendered dynamically from localStorage / state -->
                 </div>
             </div>
 
             <hr class="border-slate-800/80">
 
-            <!-- Custom Protocol Settings Form -->
+            <!-- 2. Custom Protocol Editor & Save Actions -->
             <div>
-                <div class="flex items-center justify-between mb-3">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
                     <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                         <i class="fa-solid fa-sliders text-sky-400"></i>
-                        自訂訓練參數
+                        線上編輯參數
                     </h2>
-                    <span id="settingsLockHint" class="text-xs text-slate-400">
-                        可隨時調整
+                    <!-- Unsaved Changes Status Badge -->
+                    <span id="dirtyStateBadge" class="hidden text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                        ● 參數已變更，尚未儲存
+                    </span>
+                    <span id="savedStateBadge" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        ✓ 已與方案同步
                     </span>
                 </div>
 
                 <!-- Settings Lock Overlay Warning when Timer is Running -->
                 <div id="runningLockNotice" class="hidden mb-3 px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
-                    <span><i class="fa-solid fa-circle-info mr-1.5"></i>計時進行中，暫停或重設後即可修改參數</span>
+                    <span><i class="fa-solid fa-circle-info mr-1.5"></i>計時進行中，暫停後即可修改與儲存方案</span>
                     <button onclick="pauseForEdit()" class="underline font-bold ml-2">立即暫停</button>
                 </div>
 
                 <div id="settingsControlsContainer" class="space-y-2.5">
+                    <!-- Preset Name Input -->
+                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-950/70 border border-slate-800/90">
+                        <label for="inputPresetName" class="text-xs sm:text-sm font-bold text-slate-300 whitespace-nowrap flex items-center gap-1.5">
+                            <i class="fa-solid fa-tag text-amber-400"></i>
+                            方案名稱
+                        </label>
+                        <input id="inputPresetName" type="text" maxlength="20" value="標準 Tabata" oninput="onManualInputChange()"
+                            placeholder="輸入方案名稱..."
+                            class="w-full max-w-[200px] text-right font-bold text-sm bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-white focus:outline-none focus:border-amber-400">
+                    </div>
+
                     <!-- Prepare Time -->
-                    <div class="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-slate-950/60 border border-slate-800/90">
+                    <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/60 border border-slate-800/90">
                         <div class="flex items-center gap-2.5">
-                            <span class="w-3 h-8 rounded-full bg-amber-400"></span>
+                            <span class="w-2.5 h-7 rounded-full bg-amber-400"></span>
                             <div>
                                 <label for="inputPrepare" class="text-sm font-bold text-white block">準備時間 (Prepare)</label>
                                 <span class="text-[11px] text-slate-400">開始前的暖身倒數 (秒)</span>
@@ -339,16 +370,16 @@
                         </div>
                         <div class="flex items-center gap-1.5">
                             <button onclick="adjustParam('prepare', -5)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">-</button>
-                            <input id="inputPrepare" type="number" min="0" max="300" value="10" onchange="onManualInputChange()"
-                                class="w-14 text-center font-mono font-bold text-base bg-slate-900 border border-slate-700 rounded-xl py-1 text-amber-400 focus:outline-none focus:border-amber-400">
+                            <input id="inputPrepare" type="number" min="0" max="300" value="10" oninput="onManualInputChange()"
+                                class="w-14 text-center font-mono tabular-nums font-bold text-base bg-slate-900 border border-slate-700 rounded-xl py-1 text-amber-400 focus:outline-none focus:border-amber-400">
                             <button onclick="adjustParam('prepare', 5)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">+</button>
                         </div>
                     </div>
 
                     <!-- Work Time -->
-                    <div class="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-slate-950/60 border border-slate-800/90">
+                    <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/60 border border-slate-800/90">
                         <div class="flex items-center gap-2.5">
-                            <span class="w-3 h-8 rounded-full bg-rose-500"></span>
+                            <span class="w-2.5 h-7 rounded-full bg-rose-500"></span>
                             <div>
                                 <label for="inputWork" class="text-sm font-bold text-white block">運動時間 (Work)</label>
                                 <span class="text-[11px] text-slate-400">高強度全力衝刺 (秒)</span>
@@ -356,16 +387,16 @@
                         </div>
                         <div class="flex items-center gap-1.5">
                             <button onclick="adjustParam('work', -5)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">-</button>
-                            <input id="inputWork" type="number" min="5" max="600" value="20" onchange="onManualInputChange()"
-                                class="w-14 text-center font-mono font-bold text-base bg-slate-900 border border-slate-700 rounded-xl py-1 text-rose-400 focus:outline-none focus:border-rose-400">
+                            <input id="inputWork" type="number" min="5" max="600" value="20" oninput="onManualInputChange()"
+                                class="w-14 text-center font-mono tabular-nums font-bold text-base bg-slate-900 border border-slate-700 rounded-xl py-1 text-rose-400 focus:outline-none focus:border-rose-400">
                             <button onclick="adjustParam('work', 5)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">+</button>
                         </div>
                     </div>
 
                     <!-- Rest Time -->
-                    <div class="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-slate-950/60 border border-slate-800/90">
+                    <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/60 border border-slate-800/90">
                         <div class="flex items-center gap-2.5">
-                            <span class="w-3 h-8 rounded-full bg-cyan-400"></span>
+                            <span class="w-2.5 h-7 rounded-full bg-cyan-400"></span>
                             <div>
                                 <label for="inputRest" class="text-sm font-bold text-white block">休息時間 (Rest)</label>
                                 <span class="text-[11px] text-slate-400">動作間短暫緩和 (秒)</span>
@@ -373,16 +404,16 @@
                         </div>
                         <div class="flex items-center gap-1.5">
                             <button onclick="adjustParam('rest', -5)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">-</button>
-                            <input id="inputRest" type="number" min="0" max="600" value="10" onchange="onManualInputChange()"
-                                class="w-14 text-center font-mono font-bold text-base bg-slate-900 border border-slate-700 rounded-xl py-1 text-cyan-400 focus:outline-none focus:border-cyan-400">
+                            <input id="inputRest" type="number" min="0" max="600" value="10" oninput="onManualInputChange()"
+                                class="w-14 text-center font-mono tabular-nums font-bold text-base bg-slate-900 border border-slate-700 rounded-xl py-1 text-cyan-400 focus:outline-none focus:border-cyan-400">
                             <button onclick="adjustParam('rest', 5)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">+</button>
                         </div>
                     </div>
 
                     <!-- Rounds -->
-                    <div class="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-slate-950/60 border border-slate-800/90">
+                    <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/60 border border-slate-800/90">
                         <div class="flex items-center gap-2.5">
-                            <span class="w-3 h-8 rounded-full bg-emerald-400"></span>
+                            <span class="w-2.5 h-7 rounded-full bg-emerald-400"></span>
                             <div>
                                 <label for="inputRounds" class="text-sm font-bold text-white block">循環次數 (Rounds)</label>
                                 <span class="text-[11px] text-slate-400">每組包含的運動循環數</span>
@@ -390,41 +421,61 @@
                         </div>
                         <div class="flex items-center gap-1.5">
                             <button onclick="adjustParam('rounds', -1)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">-</button>
-                            <input id="inputRounds" type="number" min="1" max="50" value="8" onchange="onManualInputChange()"
-                                class="w-14 text-center font-mono font-bold text-base bg-slate-900 border border-slate-700 rounded-xl py-1 text-emerald-400 focus:outline-none focus:border-emerald-400">
+                            <input id="inputRounds" type="number" min="1" max="50" value="8" oninput="onManualInputChange()"
+                                class="w-14 text-center font-mono tabular-nums font-bold text-base bg-slate-900 border border-slate-700 rounded-xl py-1 text-emerald-400 focus:outline-none focus:border-emerald-400">
                             <button onclick="adjustParam('rounds', 1)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">+</button>
                         </div>
                     </div>
 
                     <!-- Sets & Set Rest Row -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <!-- Sets -->
-                        <div class="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-slate-950/60 border border-slate-800/90">
+                        <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/60 border border-slate-800/90">
                             <div>
                                 <label for="inputSets" class="text-xs sm:text-sm font-bold text-white block">組數 (Sets)</label>
                                 <span class="text-[10px] text-slate-400">總訓練組數</span>
                             </div>
                             <div class="flex items-center gap-1">
                                 <button onclick="adjustParam('sets', -1)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">-</button>
-                                <input id="inputSets" type="number" min="1" max="20" value="1" onchange="onManualInputChange()"
-                                    class="w-11 text-center font-mono font-bold text-sm bg-slate-900 border border-slate-700 rounded-lg py-1 text-sky-400 focus:outline-none">
+                                <input id="inputSets" type="number" min="1" max="20" value="1" oninput="onManualInputChange()"
+                                    class="w-11 text-center font-mono tabular-nums font-bold text-sm bg-slate-900 border border-slate-700 rounded-lg py-1 text-sky-400 focus:outline-none">
                                 <button onclick="adjustParam('sets', 1)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">+</button>
                             </div>
                         </div>
 
                         <!-- Set Rest -->
-                        <div class="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-slate-950/60 border border-slate-800/90">
+                        <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/60 border border-slate-800/90">
                             <div>
                                 <label for="inputSetRest" class="text-xs sm:text-sm font-bold text-white block">組間休息</label>
                                 <span class="text-[10px] text-slate-400">每組間隔 (秒)</span>
                             </div>
                             <div class="flex items-center gap-1">
                                 <button onclick="adjustParam('setRest', -10)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">-</button>
-                                <input id="inputSetRest" type="number" min="0" max="600" value="60" onchange="onManualInputChange()"
-                                    class="w-12 text-center font-mono font-bold text-sm bg-slate-900 border border-slate-700 rounded-lg py-1 text-purple-400 focus:outline-none">
+                                <input id="inputSetRest" type="number" min="0" max="600" value="60" oninput="onManualInputChange()"
+                                    class="w-12 text-center font-mono tabular-nums font-bold text-sm bg-slate-900 border border-slate-700 rounded-lg py-1 text-purple-400 focus:outline-none">
                                 <button onclick="adjustParam('setRest', 10)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold active:scale-90 transition">+</button>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Preset Save / Save As / Delete Action Bar -->
+                    <div class="pt-2 grid grid-cols-12 gap-2">
+                        <button onclick="saveCurrentPresetChanges()"
+                            class="col-span-5 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-extrabold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>💾 儲存修改</span>
+                        </button>
+
+                        <button onclick="saveAsNewPreset()"
+                            class="col-span-5 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-300 border border-emerald-500/30 font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>➕ 另存新方案</span>
+                        </button>
+
+                        <button onclick="deleteSelectedPreset()" title="刪除目前選中的方案"
+                            class="col-span-2 py-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 active:scale-95 text-rose-400 border border-slate-700 hover:border-rose-500/40 font-bold text-xs sm:text-sm transition flex items-center justify-center">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -432,12 +483,12 @@
             <!-- Workout Summary Footer Card -->
             <div class="bg-slate-950/80 rounded-2xl p-3.5 border border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                 <div class="flex items-center gap-2">
-                    <i class="fa-solid fa-Stopwatch text-amber-400 text-sm"></i>
-                    <span>預估總訓練時長：<strong id="summaryTotalDuration" class="text-white font-mono">04:10</strong></span>
+                    <i class="fa-solid fa-stopwatch text-amber-400 text-sm"></i>
+                    <span>預估總訓練時長：<strong id="summaryTotalDuration" class="text-white font-mono tabular-nums">04:10</strong></span>
                 </div>
-                <button onclick="testAudioChime()" class="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition">
-                    <i class="fa-solid fa-bell"></i>
-                    <span>測試音效</span>
+                <button onclick="previewThreeSecondCountdown()" class="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition">
+                    <i class="fa-solid fa-volume-high"></i>
+                    <span>測試 3 秒倒數音</span>
                 </button>
             </div>
         </aside>
@@ -445,9 +496,9 @@
 
     <!-- Footer -->
     <footer class="w-full max-w-5xl mx-auto px-6 py-3 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-        <span>Tabata 高強度間歇訓練計時器 • 支援離線精準計時與 Web Audio 合成音效</span>
-        <span id="wakeLockStatus" class="text-slate-600 flex items-center gap-1">
-            <i class="fa-solid fa-mobile-screen"></i> 訓練時自動保持螢幕常亮
+        <span>Tabata 高強度間歇訓練計時器 • 方案自動儲存於本機瀏覽器 (localStorage)</span>
+        <span id="wakeLockStatus" class="text-slate-500 flex items-center gap-1">
+            <i class="fa-solid fa-mobile-screen"></i> 支援 iPhone 主畫面 Web App 與防螢幕休眠
         </span>
     </footer>
 
@@ -455,9 +506,18 @@
     <script>
         /**
          * ============================================================================
-         * 1. STATE & CONFIGURATION
+         * 1. STATE, DEFAULT PRESETS & LOCALSTORAGE PERSISTENCE
          * ============================================================================
          */
+        const STORAGE_KEY_PRESETS = 'tabata_pro_custom_presets_v2';
+        const STORAGE_KEY_ACTIVE_ID = 'tabata_pro_active_preset_id_v2';
+
+        const INITIAL_DEFAULT_PRESETS = [
+            { id: 'preset_standard', name: '標準 Tabata', prepare: 10, work: 20, rest: 10, rounds: 8, sets: 1, setRest: 60 },
+            { id: 'preset_beginner', name: '初階入門',    prepare: 10, work: 15, rest: 15, rounds: 6, sets: 1, setRest: 60 },
+            { id: 'preset_intense',  name: '高強度燃脂',  prepare: 10, work: 30, rest: 10, rounds: 8, sets: 3, setRest: 60 }
+        ];
+
         const PHASES = {
             PREPARE: 'PREPARE',
             WORK: 'WORK',
@@ -472,51 +532,51 @@
                 enLabel: 'PREPARE',
                 subtitle: '調整呼吸，準備進入高強度運動',
                 color: '#f59e0b', // Amber 500
-                glow: 'rgba(245, 158, 11, 0.35)',
+                glow: 'rgba(245, 158, 11, 0.38)',
                 tint: 'rgba(245, 158, 11, 0.10)',
                 badgeClasses: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
                 dotClass: 'bg-amber-400',
                 btnGradient: 'from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-amber-500/25'
             },
             WORK: {
-                title: '全力運動',
+                title: '🔥 全力運動',
                 enLabel: 'WORK IT!',
                 subtitle: '保持最高強度，堅持到底！',
                 color: '#f43f5e', // Rose 500
-                glow: 'rgba(244, 63, 94, 0.45)',
-                tint: 'rgba(244, 63, 94, 0.13)',
+                glow: 'rgba(244, 63, 94, 0.48)',
+                tint: 'rgba(244, 63, 94, 0.14)',
                 badgeClasses: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
                 dotClass: 'bg-rose-500',
                 btnGradient: 'from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 shadow-rose-500/30'
             },
             REST: {
-                title: '短暫休息',
+                title: '💧 短暫休息',
                 enLabel: 'REST',
                 subtitle: '深呼吸調整心率，準備下一循環',
                 color: '#06b6d4', // Cyan 500
-                glow: 'rgba(6, 182, 212, 0.38)',
+                glow: 'rgba(6, 182, 212, 0.40)',
                 tint: 'rgba(6, 182, 212, 0.10)',
                 badgeClasses: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
                 dotClass: 'bg-cyan-400',
                 btnGradient: 'from-cyan-500 to-sky-500 hover:from-cyan-400 hover:to-sky-400 shadow-cyan-500/25'
             },
             SET_REST: {
-                title: '組間休息',
+                title: '💧 組間休息',
                 enLabel: 'SET RECOVERY',
                 subtitle: '補充水分，緩和肌肉準備下一組',
                 color: '#a855f7', // Purple 500
-                glow: 'rgba(168, 85, 247, 0.38)',
+                glow: 'rgba(168, 85, 247, 0.40)',
                 tint: 'rgba(168, 85, 247, 0.11)',
                 badgeClasses: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
                 dotClass: 'bg-purple-400',
                 btnGradient: 'from-purple-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 shadow-purple-500/25'
             },
             COMPLETED: {
-                title: '訓練完成！',
+                title: '🏆 訓練完成！',
                 enLabel: 'COMPLETED',
                 subtitle: '恭喜完成今日 Tabata 高強度間歇訓練！',
                 color: '#10b981', // Emerald 500
-                glow: 'rgba(16, 185, 129, 0.42)',
+                glow: 'rgba(16, 185, 129, 0.45)',
                 tint: 'rgba(16, 185, 129, 0.12)',
                 badgeClasses: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
                 dotClass: 'bg-emerald-400',
@@ -524,14 +584,13 @@
             }
         };
 
-        const PRESETS = {
-            standard: { name: '標準 Tabata', prepare: 10, work: 20, rest: 10, rounds: 8, sets: 1, setRest: 60 },
-            beginner: { name: '初階入門', prepare: 10, work: 15, rest: 15, rounds: 6, sets: 1, setRest: 60 },
-            intense:  { name: '高強度燃脂', prepare: 10, work: 30, rest: 10, rounds: 8, sets: 1, setRest: 60 }
-        };
+        // Saved presets array & currently selected preset ID
+        let presets = [];
+        let activePresetId = 'preset_standard';
 
-        // Current User Settings
+        // Current Editor / Active Workout Configuration
         let config = {
+            name: '標準 Tabata',
             prepare: 10,
             work: 20,
             rest: 10,
@@ -549,7 +608,6 @@
             phaseDuration: 10,       // Total seconds for current phase
             phaseRemainingMs: 10000, // Milliseconds remaining in current phase
             totalWorkoutSeconds: 0,
-            elapsedWorkoutMs: 0,
             lastTickTimestamp: null,
             lastAnnouncedSecond: null,
             isMuted: false,
@@ -557,6 +615,7 @@
         };
 
         let timerInterval = null;
+        let previewTimeoutIds = [];
         let audioCtx = null;
         let wakeLockSentinel = null;
 
@@ -565,10 +624,37 @@
 
         /**
          * ============================================================================
-         * 2. WEB AUDIO API SYNTHESIZER & VOICE ANNOUNCEMENTS
+         * 2. TOAST NOTIFICATION HELPER
          * ============================================================================
          */
-        function initAudioContext() {
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            const colorMap = {
+                success: 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200 shadow-emerald-950/50',
+                warn:    'bg-amber-950/95 border-amber-500/50 text-amber-200 shadow-amber-950/50',
+                info:    'bg-slate-900/95 border-sky-500/50 text-sky-200 shadow-slate-950/50'
+            };
+
+            toast.className = `px-4 py-2.5 rounded-2xl border backdrop-blur-md text-xs sm:text-sm font-bold shadow-xl transition-all duration-300 transform translate-y-0 opacity-100 flex items-center gap-2 ${colorMap[type] || colorMap.success}`;
+            toast.innerHTML = `<span>${message}</span>`;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2600);
+        }
+
+        /**
+         * ============================================================================
+         * 3. WEB AUDIO API SYNTHESIZER (iOS SAFARI UNLOCK & 3-2-1 COUNTDOWN CUES)
+         * ============================================================================
+         */
+        function unlockAndInitAudioContext() {
             try {
                 if (!audioCtx) {
                     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -577,64 +663,97 @@
                 if (audioCtx && audioCtx.state === 'suspended') {
                     audioCtx.resume();
                 }
+                // Play a 1-sample silent buffer to forcefully unlock iOS Safari audio output on user gesture
+                if (audioCtx) {
+                    const buffer = audioCtx.createBuffer(1, 1, 22050);
+                    const source = audioCtx.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(audioCtx.destination);
+                    source.start(0);
+                }
             } catch (err) {
                 console.warn('Web Audio API initialization skipped:', err);
             }
         }
 
         /**
-         * Play synthesized tone with customizable frequency, duration, wave type, and envelope
+         * Play synthesized tone with dual oscillators for extra clarity on mobile speakers
          */
-        function playTone(freq = 880, duration = 0.12, type = 'sine', startTimeOffset = 0, peakGain = 0.25) {
+        function playTone(freq = 880, duration = 0.15, type = 'triangle', startTimeOffset = 0, peakGain = 0.38) {
             if (state.isMuted) return;
             try {
-                initAudioContext();
+                if (!audioCtx) unlockAndInitAudioContext();
                 if (!audioCtx) return;
+                if (audioCtx.state === 'suspended') audioCtx.resume();
 
                 const now = audioCtx.currentTime + startTimeOffset;
-                const osc = audioCtx.createOscillator();
+
+                // Primary oscillator
+                const osc1 = audioCtx.createOscillator();
+                // Secondary harmonic oscillator for crisp mobile speaker presence
+                const osc2 = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
 
-                osc.type = type;
-                osc.frequency.setValueAtTime(freq, now);
+                osc1.type = type;
+                osc1.frequency.setValueAtTime(freq, now);
 
-                // Crisp envelope to avoid clicking
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(freq * 2, now); // Octave overtone
+
+                const overtoneGain = audioCtx.createGain();
+                overtoneGain.gain.setValueAtTime(0.25, now);
+
+                // Crisp attack and smooth exponential decay to prevent speaker pop
                 gainNode.gain.setValueAtTime(0.001, now);
-                gainNode.gain.exponentialRampToValueAtTime(peakGain, now + 0.015);
+                gainNode.gain.linearRampToValueAtTime(peakGain, now + 0.012);
                 gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
-                osc.connect(gainNode);
+                osc1.connect(gainNode);
+                osc2.connect(overtoneGain);
+                overtoneGain.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
 
-                osc.start(now);
-                osc.stop(now + duration + 0.02);
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + duration + 0.02);
+                osc2.stop(now + duration + 0.02);
             } catch (e) {
                 console.warn('Audio playback error:', e);
             }
         }
 
-        // 3, 2, 1 Countdown Short Beep
-        function playCountdownBeep() {
-            playTone(660, 0.11, 'triangle', 0, 0.25);
+        /**
+         * 3, 2, 1 Countdown Short Crisp Beep (880Hz A5 - High clarity on iPhone speakers)
+         */
+        function playCountdownBeep(secondsRemaining = 3) {
+            // Slight pitch escalation on final second if desired, or steady crisp 880Hz
+            const pitch = secondsRemaining === 1 ? 987.77 : 880; // B5 on 1s, A5 on 3s & 2s
+            playTone(pitch, 0.16, 'triangle', 0, 0.42);
         }
 
-        // Transition to WORK phase: Energetic high rising double-beep
+        /**
+         * Transition to WORK phase (0s): Energetic rising high dual-tone (C6 -> E6)
+         */
         function playWorkStartSound() {
-            playTone(880, 0.12, 'sawtooth', 0, 0.22);
-            playTone(1318.5, 0.38, 'sawtooth', 0.13, 0.28);
+            playTone(1046.5, 0.14, 'sawtooth', 0, 0.36);
+            playTone(1318.5, 0.42, 'sawtooth', 0.14, 0.42);
         }
 
-        // Transition to REST / SET_REST phase: Calming descending chime
+        /**
+         * Transition to REST / SET_REST phase (0s): Calming descending bell chime (G5 -> C5)
+         */
         function playRestStartSound() {
-            playTone(784, 0.16, 'sine', 0, 0.25);
-            playTone(523.25, 0.35, 'sine', 0.16, 0.25);
+            playTone(783.99, 0.18, 'sine', 0, 0.35);
+            playTone(523.25, 0.40, 'triangle', 0.18, 0.38);
         }
 
-        // Workout Completed Fanfare Chime
+        /**
+         * Workout Completed Fanfare Chime (C5 - E5 - G5 - C6)
+         */
         function playCompletionFanfare() {
-            const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+            const notes = [523.25, 659.25, 783.99, 1046.5];
             notes.forEach((freq, idx) => {
-                playTone(freq, idx === notes.length - 1 ? 0.55 : 0.16, 'triangle', idx * 0.14, 0.28);
+                playTone(freq, idx === notes.length - 1 ? 0.60 : 0.16, 'triangle', idx * 0.14, 0.40);
             });
         }
 
@@ -646,54 +765,118 @@
                     window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.lang = 'zh-TW';
-                    utterance.rate = 1.15;
+                    utterance.rate = 1.2;
                     utterance.pitch = 1.05;
                     window.speechSynthesis.speak(utterance);
                 }
-            } catch (e) {
-                // Ignore speech synthesis errors on unsupported browsers
-            }
+            } catch (e) {}
         }
 
-        function testAudioChime() {
-            initAudioContext();
+        /**
+         * Live interactive preview of the 3-2-1 Countdown + Start Sound
+         */
+        function previewThreeSecondCountdown() {
+            unlockAndInitAudioContext();
             if (state.isMuted) {
                 toggleMute();
             }
-            playWorkStartSound();
-            speakCue('音效測試正常');
+
+            // Clear any running preview timeouts
+            previewTimeoutIds.forEach(id => clearTimeout(id));
+            previewTimeoutIds = [];
+
+            showToast('🔊 正在試聽：倒數 3、2、1 秒與開始提示音', 'info');
+
+            const urgentPill = document.getElementById('urgentAlertPill');
+            const urgentText = document.getElementById('urgentAlertText');
+            const timerDisplay = document.getElementById('timerDisplay');
+
+            const triggerStep = (secLabel, delayMs, callback) => {
+                const tid = setTimeout(() => {
+                    callback();
+                }, delayMs);
+                previewTimeoutIds.push(tid);
+            };
+
+            // 3 seconds
+            triggerStep(3, 0, () => {
+                playCountdownBeep(3);
+                if (!state.isRunning) {
+                    urgentPill.classList.remove('hidden');
+                    urgentPill.classList.add('inline-flex');
+                    urgentText.textContent = '倒數提醒 3';
+                    timerDisplay.classList.add('urgent-countdown');
+                }
+            });
+
+            // 2 seconds
+            triggerStep(2, 650, () => {
+                playCountdownBeep(2);
+                if (!state.isRunning) {
+                    urgentText.textContent = '倒數提醒 2';
+                }
+            });
+
+            // 1 second
+            triggerStep(1, 1300, () => {
+                playCountdownBeep(1);
+                if (!state.isRunning) {
+                    urgentText.textContent = '倒數提醒 1';
+                }
+            });
+
+            // GO!
+            triggerStep(0, 1950, () => {
+                playWorkStartSound();
+                if (!state.isRunning) {
+                    urgentText.textContent = '🔥 開始衝刺！';
+                    setTimeout(() => {
+                        if (!state.isRunning) {
+                            urgentPill.classList.add('hidden');
+                            urgentPill.classList.remove('inline-flex');
+                            timerDisplay.classList.remove('urgent-countdown');
+                        }
+                    }, 800);
+                }
+            });
         }
 
         function toggleMute() {
+            unlockAndInitAudioContext();
             state.isMuted = !state.isMuted;
             const muteIcon = document.getElementById('muteIcon');
             const muteText = document.getElementById('muteText');
             if (state.isMuted) {
-                muteIcon.className = 'fa-solid fa-volume-xmark text-rose-400';
+                muteIcon.className = 'fa-solid fa-bell-slash text-rose-400';
                 muteText.textContent = '靜音中';
                 if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                showToast('🔇 已關閉提示音', 'warn');
             } else {
-                muteIcon.className = 'fa-solid fa-volume-high text-amber-400';
-                muteText.textContent = '音效開啟';
-                playCountdownBeep();
+                muteIcon.className = 'fa-solid fa-bell text-amber-400';
+                muteText.textContent = '提示音開啟';
+                playCountdownBeep(3);
+                showToast('🔔 已開啟提示音', 'info');
             }
         }
 
         function toggleVoice() {
+            unlockAndInitAudioContext();
             state.isVoiceEnabled = !state.isVoiceEnabled;
             const voiceIcon = document.getElementById('voiceIcon');
             if (state.isVoiceEnabled) {
                 voiceIcon.className = 'fa-solid fa-microphone-lines text-emerald-400';
-                speakCue('語音開啟');
+                speakCue('語音播報開啟');
+                showToast('🗣️ 已開啟中文語音播報', 'info');
             } else {
                 voiceIcon.className = 'fa-solid fa-microphone-lines-slash text-slate-500';
                 if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                showToast('🔇 已關閉語音播報（保留倒數嗶聲）', 'warn');
             }
         }
 
         /**
          * ============================================================================
-         * 3. SCREEN WAKE LOCK HELPER
+         * 4. SCREEN WAKE LOCK HELPER
          * ============================================================================
          */
         async function requestWakeLock() {
@@ -704,9 +887,7 @@
                         wakeLockSentinel = null;
                     });
                 }
-            } catch (e) {
-                // Ignore if blocked by iframe/permissions policy
-            }
+            } catch (e) {}
         }
 
         function releaseWakeLock() {
@@ -720,27 +901,22 @@
 
         /**
          * ============================================================================
-         * 4. WORKOUT DURATION & PHASE SEQUENCE CALCULATIONS
+         * 5. WORKOUT DURATION & PHASE SEQUENCE CALCULATIONS
          * ============================================================================
          */
         function calculateTotalWorkoutSeconds() {
             const prepareSec = config.prepare;
-            // In each set: (rounds * work) + ((rounds - 1) * rest)
             const singleSetSec = (config.rounds * config.work) + (Math.max(0, config.rounds - 1) * config.rest);
             const allSetsSec = singleSetSec * config.sets;
             const allSetRestsSec = Math.max(0, config.sets - 1) * config.setRest;
             return prepareSec + allSetsSec + allSetRestsSec;
         }
 
-        /**
-         * Calculate exact remaining seconds from current state
-         */
         function calculateRemainingWorkoutSeconds() {
             if (state.phase === PHASES.COMPLETED) return 0;
 
             let remaining = Math.ceil(state.phaseRemainingMs / 1000);
 
-            // Add remaining phases in the current set
             if (state.phase === PHASES.PREPARE) {
                 const singleSetSec = (config.rounds * config.work) + (Math.max(0, config.rounds - 1) * config.rest);
                 remaining += (singleSetSec * config.sets) + (Math.max(0, config.sets - 1) * config.setRest);
@@ -748,10 +924,9 @@
             }
 
             if (state.phase === PHASES.WORK) {
-                // If not last round of current set, we still have rest after this work
                 const roundsLeftInCurrentSet = config.rounds - state.currentRound;
                 if (roundsLeftInCurrentSet > 0) {
-                    remaining += config.rest; // Rest for current round
+                    remaining += config.rest;
                     remaining += roundsLeftInCurrentSet * config.work + (roundsLeftInCurrentSet - 1) * config.rest;
                 }
             } else if (state.phase === PHASES.REST) {
@@ -760,15 +935,12 @@
                     remaining += roundsLeftInCurrentSet * config.work + (roundsLeftInCurrentSet - 1) * config.rest;
                 }
             } else if (state.phase === PHASES.SET_REST) {
-                // When in SET_REST, currentSet hasn't incremented yet (or is transitioning to next set)
-                // Remaining sets after this setRest = config.sets - state.currentSet
                 const setsRemaining = config.sets - state.currentSet;
                 const singleSetSec = (config.rounds * config.work) + (Math.max(0, config.rounds - 1) * config.rest);
                 remaining += setsRemaining * singleSetSec + Math.max(0, setsRemaining - 1) * config.setRest;
                 return remaining;
             }
 
-            // Add future sets if any
             const setsLeftAfterCurrent = config.sets - state.currentSet;
             if (setsLeftAfterCurrent > 0) {
                 const singleSetSec = (config.rounds * config.work) + (Math.max(0, config.rounds - 1) * config.rest);
@@ -785,12 +957,9 @@
             return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
         }
 
-        /**
-         * Determine what the next phase is for the preview pill
-         */
         function getNextPhaseDescription() {
             if (state.phase === PHASES.COMPLETED) {
-                return '點擊重設再次挑戰';
+                return '點擊重置再次挑戰';
             }
             if (state.phase === PHASES.PREPARE) {
                 return `全力運動 ${config.work}s`;
@@ -814,11 +983,11 @@
 
         /**
          * ============================================================================
-         * 5. CORE TIMER ENGINE & TRANSITIONS
+         * 6. CORE TIMER ENGINE & 3-2-1 COUNTDOWN TRIGGERS
          * ============================================================================
          */
         function toggleStartPause() {
-            initAudioContext();
+            unlockAndInitAudioContext();
 
             if (state.phase === PHASES.COMPLETED) {
                 resetWorkout();
@@ -840,9 +1009,14 @@
             requestWakeLock();
 
             // Announce initial phase if starting from clean beginning
-            if (state.phase === PHASES.PREPARE && Math.abs(state.phaseRemainingMs - config.prepare * 1000) < 100) {
+            if (state.phase === PHASES.PREPARE && Math.abs(state.phaseRemainingMs - config.prepare * 1000) < 120) {
                 if (config.prepare > 0) {
-                    playCountdownBeep();
+                    if (config.prepare <= 3) {
+                        state.lastAnnouncedSecond = config.prepare;
+                        playCountdownBeep(config.prepare);
+                    } else {
+                        playCountdownBeep(3);
+                    }
                     speakCue('準備開始');
                 } else {
                     transitionToNextPhase();
@@ -857,7 +1031,7 @@
                 state.lastTickTimestamp = now;
 
                 tick(deltaMs);
-            }, 50);
+            }, 40);
         }
 
         function pauseTimer() {
@@ -896,7 +1070,7 @@
         }
 
         function skipPhase() {
-            initAudioContext();
+            unlockAndInitAudioContext();
             if (state.phase === PHASES.COMPLETED) return;
             transitionToNextPhase();
             updateUI();
@@ -907,11 +1081,11 @@
 
             state.phaseRemainingMs -= deltaMs;
 
-            // Check for 3, 2, 1 second audio beep cues
+            // Check for 3, 2, 1 second audio beep cues in ALL active phases
             const currentCeilSec = Math.ceil(state.phaseRemainingMs / 1000);
             if (currentCeilSec <= 3 && currentCeilSec >= 1 && state.lastAnnouncedSecond !== currentCeilSec) {
                 state.lastAnnouncedSecond = currentCeilSec;
-                playCountdownBeep();
+                playCountdownBeep(currentCeilSec);
             }
 
             // Phase completed?
@@ -933,7 +1107,6 @@
             }
 
             if (state.phase === PHASES.WORK) {
-                // Check if more rounds remain in this set
                 if (state.currentRound < config.rounds) {
                     if (config.rest > 0) {
                         enterPhase(PHASES.REST, config.rest);
@@ -946,7 +1119,6 @@
                         speakCue(`第 ${state.currentRound} 循環，開始運動`);
                     }
                 } else {
-                    // Last round of current set finished! Check if more sets remain
                     if (state.currentSet < config.sets) {
                         if (config.setRest > 0) {
                             enterPhase(PHASES.SET_REST, config.setRest);
@@ -960,7 +1132,6 @@
                             speakCue(`第 ${state.currentSet} 組，開始運動`);
                         }
                     } else {
-                        // Entire workout finished!
                         completeWorkout();
                     }
                 }
@@ -1005,7 +1176,7 @@
 
         /**
          * ============================================================================
-         * 6. UI RENDERING & DYNAMIC THEME UPDATES
+         * 7. UI RENDERING & 3-SECOND VISUAL COUNTDOWN FEEDBACK
          * ============================================================================
          */
         function renderRoundDots() {
@@ -1017,14 +1188,11 @@
                 let classes = 'h-2.5 rounded-full transition-all duration-300 ';
 
                 if (state.phase === PHASES.COMPLETED || i < state.currentRound) {
-                    // Completed round
                     classes += 'w-6 bg-emerald-400 shadow-sm shadow-emerald-500/50';
                 } else if (i === state.currentRound && state.phase !== PHASES.PREPARE) {
-                    // Active round
                     const activeColor = state.phase === PHASES.WORK ? 'bg-rose-500' : 'bg-cyan-400';
                     classes += `w-8 ${activeColor} animate-pulse`;
                 } else {
-                    // Upcoming round
                     classes += 'w-2.5 bg-slate-800 border border-slate-700';
                 }
 
@@ -1053,21 +1221,33 @@
             document.getElementById('phaseSubtitle').textContent = meta.subtitle;
             document.getElementById('currentPhaseLabelSmall').textContent = meta.enLabel;
 
-            // 3. Update Main Countdown Display
+            // 3. Update Main Countdown Display & 3-2-1 Urgent Visual Alert
             const timerDisplay = document.getElementById('timerDisplay');
+            const urgentPill = document.getElementById('urgentAlertPill');
+            const urgentText = document.getElementById('urgentAlertText');
+            const progressRing = document.getElementById('progressRing');
+
             const ceilSeconds = Math.ceil(state.phaseRemainingMs / 1000);
             timerDisplay.textContent = formatTimeMMSS(ceilSeconds);
 
-            if (state.isRunning && ceilSeconds <= 3 && ceilSeconds >= 1) {
+            const isUrgentLastThree = state.isRunning && state.phase !== PHASES.COMPLETED && ceilSeconds <= 3 && ceilSeconds >= 1;
+
+            if (isUrgentLastThree) {
                 timerDisplay.classList.add('urgent-countdown');
                 timerDisplay.style.color = meta.color;
+                progressRing.classList.add('urgent-ring-flash');
+                urgentPill.classList.remove('hidden');
+                urgentPill.classList.add('inline-flex');
+                urgentText.textContent = `🔊 倒數提醒 ${ceilSeconds}`;
             } else {
                 timerDisplay.classList.remove('urgent-countdown');
                 timerDisplay.style.color = '#ffffff';
+                progressRing.classList.remove('urgent-ring-flash');
+                urgentPill.classList.add('hidden');
+                urgentPill.classList.remove('inline-flex');
             }
 
             // 4. Update Circular SVG Progress Ring
-            const progressRing = document.getElementById('progressRing');
             progressRing.style.stroke = meta.color;
             const totalPhaseMs = state.phaseDuration * 1000;
             const fractionRemaining = totalPhaseMs > 0 ? Math.max(0, Math.min(1, state.phaseRemainingMs / totalPhaseMs)) : 0;
@@ -1110,7 +1290,7 @@
             } else {
                 startPauseBtn.className = `col-span-2 py-3.5 sm:py-4 rounded-2xl bg-gradient-to-r ${meta.btnGradient} active:scale-95 text-slate-950 font-black text-base sm:text-lg transition flex items-center justify-center gap-2.5 shadow-lg`;
                 startPauseIcon.className = 'fa-solid fa-play text-lg';
-                const isAtStart = state.phase === PHASES.PREPARE && Math.abs(state.phaseRemainingMs - config.prepare * 1000) < 100;
+                const isAtStart = state.phase === PHASES.PREPARE && Math.abs(state.phaseRemainingMs - config.prepare * 1000) < 120;
                 startPauseText.textContent = isAtStart ? '開始訓練' : '繼續訓練';
             }
 
@@ -1124,45 +1304,246 @@
                 runningLockNotice.classList.add('hidden');
                 settingsContainer.classList.remove('opacity-50', 'pointer-events-none');
             }
+
+            updateDirtyStateIndicator();
         }
 
         /**
          * ============================================================================
-         * 7. PRESETS & PARAMETER CUSTOMIZATION HANDLERS
+         * 8. EDITABLE PRESETS & LOCALSTORAGE MANAGEMENT
          * ============================================================================
          */
-        function applyPreset(presetKey) {
-            if (state.isRunning) {
-                pauseTimer();
+        function loadPresetsFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_PRESETS);
+                const savedActiveId = localStorage.getItem(STORAGE_KEY_ACTIVE_ID);
+
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        presets = parsed;
+                    } else {
+                        presets = JSON.parse(JSON.stringify(INITIAL_DEFAULT_PRESETS));
+                    }
+                } else {
+                    presets = JSON.parse(JSON.stringify(INITIAL_DEFAULT_PRESETS));
+                }
+
+                const found = presets.find(p => p.id === savedActiveId) || presets[0];
+                activePresetId = found.id;
+                applyPresetById(activePresetId, false);
+            } catch (e) {
+                console.warn('localStorage load fallback:', e);
+                presets = JSON.parse(JSON.stringify(INITIAL_DEFAULT_PRESETS));
+                activePresetId = presets[0].id;
+                applyPresetById(activePresetId, false);
             }
-            const p = PRESETS[presetKey];
-            if (!p) return;
-
-            config.prepare = p.prepare;
-            config.work = p.work;
-            config.rest = p.rest;
-            config.rounds = p.rounds;
-            config.sets = p.sets;
-            config.setRest = p.setRest;
-
-            syncInputsFromConfig();
-            highlightPresetCard(presetKey, p.name);
-            resetWorkout();
         }
 
-        function highlightPresetCard(activeKey, labelText) {
-            document.getElementById('activePresetLabel').textContent = labelText || '自訂方案';
-            ['standard', 'beginner', 'intense'].forEach(key => {
-                const btn = document.getElementById(`preset-${key}`);
-                if (key === activeKey) {
-                    btn.className = 'preset-btn p-3 rounded-2xl border border-amber-500/60 bg-amber-500/10 text-left transition hover:bg-slate-800/80 active:scale-95';
-                } else {
-                    btn.className = 'preset-btn p-3 rounded-2xl border border-slate-800 bg-slate-950/60 text-left transition hover:bg-slate-800/80 active:scale-95';
-                }
+        function persistPresetsToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY_PRESETS, JSON.stringify(presets));
+                localStorage.setItem(STORAGE_KEY_ACTIVE_ID, activePresetId);
+            } catch (e) {
+                console.warn('Failed to write presets to localStorage:', e);
+            }
+        }
+
+        function renderPresetCards() {
+            const container = document.getElementById('presetListContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            presets.forEach((p) => {
+                const isSelected = p.id === activePresetId;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.onclick = () => applyPresetById(p.id, true);
+
+                btn.className = isSelected
+                    ? 'p-2.5 rounded-2xl border-2 border-amber-400 bg-amber-500/15 text-left transition active:scale-95 shadow-md shadow-amber-500/10 relative'
+                    : 'p-2.5 rounded-2xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/80 text-left transition active:scale-95 relative';
+
+                btn.innerHTML = `
+                    <div class="flex items-center justify-between gap-1">
+                        <span class="text-xs font-extrabold truncate ${isSelected ? 'text-amber-300' : 'text-slate-200'}">${escapeHtml(p.name)}</span>
+                        ${isSelected ? '<i class="fa-solid fa-circle-check text-amber-400 text-[11px] shrink-0"></i>' : ''}
+                    </div>
+                    <div class="text-xs sm:text-sm font-mono tabular-nums font-bold text-white mt-0.5">${p.work}s / ${p.rest}s</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5 truncate">${p.rounds} 循環 × ${p.sets} 組</div>
+                `;
+                container.appendChild(btn);
             });
         }
 
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function applyPresetById(presetId, notify = false) {
+            if (state.isRunning) {
+                pauseTimer();
+            }
+            const target = presets.find(p => p.id === presetId);
+            if (!target) return;
+
+            activePresetId = target.id;
+            config.name    = target.name;
+            config.prepare = target.prepare;
+            config.work    = target.work;
+            config.rest    = target.rest;
+            config.rounds  = target.rounds;
+            config.sets    = target.sets;
+            config.setRest = target.setRest;
+
+            persistPresetsToStorage();
+            syncInputsFromConfig();
+            renderPresetCards();
+            resetWorkout();
+
+            if (notify) {
+                showToast(`⚡ 已載入方案「${target.name}」`, 'info');
+            }
+        }
+
+        function isCurrentConfigDirty() {
+            const currentSaved = presets.find(p => p.id === activePresetId);
+            if (!currentSaved) return true;
+            return (
+                config.name.trim() !== currentSaved.name.trim() ||
+                config.prepare !== currentSaved.prepare ||
+                config.work !== currentSaved.work ||
+                config.rest !== currentSaved.rest ||
+                config.rounds !== currentSaved.rounds ||
+                config.sets !== currentSaved.sets ||
+                config.setRest !== currentSaved.setRest
+            );
+        }
+
+        function updateDirtyStateIndicator() {
+            const dirtyBadge = document.getElementById('dirtyStateBadge');
+            const savedBadge = document.getElementById('savedStateBadge');
+            if (!dirtyBadge || !savedBadge) return;
+
+            if (isCurrentConfigDirty()) {
+                dirtyBadge.classList.remove('hidden');
+                savedBadge.classList.add('hidden');
+            } else {
+                dirtyBadge.classList.add('hidden');
+                savedBadge.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Overwrite & Save changes to currently selected preset
+         */
+        function saveCurrentPresetChanges() {
+            if (state.isRunning) return;
+            readAndClampInputsIntoConfig();
+
+            const idx = presets.findIndex(p => p.id === activePresetId);
+            if (idx === -1) {
+                saveAsNewPreset();
+                return;
+            }
+
+            const cleanName = config.name.trim() || '自訂方案';
+            config.name = cleanName;
+
+            presets[idx] = {
+                id: activePresetId,
+                name: cleanName,
+                prepare: config.prepare,
+                work: config.work,
+                rest: config.rest,
+                rounds: config.rounds,
+                sets: config.sets,
+                setRest: config.setRest
+            };
+
+            persistPresetsToStorage();
+            syncInputsFromConfig();
+            renderPresetCards();
+            resetWorkout();
+            showToast(`✅ 已儲存「${cleanName}」修改（離線自動保留）`, 'success');
+        }
+
+        /**
+         * Save current parameters as a brand new preset card
+         */
+        function saveAsNewPreset() {
+            if (state.isRunning) return;
+            readAndClampInputsIntoConfig();
+
+            let baseName = config.name.trim() || '自訂方案';
+            if (presets.some(p => p.name === baseName)) {
+                baseName = `${baseName} (新)`;
+            }
+
+            const newId = 'preset_' + Date.now();
+            const newPreset = {
+                id: newId,
+                name: baseName,
+                prepare: config.prepare,
+                work: config.work,
+                rest: config.rest,
+                rounds: config.rounds,
+                sets: config.sets,
+                setRest: config.setRest
+            };
+
+            presets.push(newPreset);
+            activePresetId = newId;
+            config.name = baseName;
+
+            persistPresetsToStorage();
+            syncInputsFromConfig();
+            renderPresetCards();
+            resetWorkout();
+            showToast(`➕ 已新增方案「${baseName}」並儲存`, 'success');
+        }
+
+        /**
+         * Delete currently selected preset (retaining at least 1)
+         */
+        function deleteSelectedPreset() {
+            if (state.isRunning) return;
+            if (presets.length <= 1) {
+                showToast('⚠️ 系統至少需保留一個訓練方案', 'warn');
+                return;
+            }
+
+            const target = presets.find(p => p.id === activePresetId);
+            const removedName = target ? target.name : '方案';
+
+            presets = presets.filter(p => p.id !== activePresetId);
+            activePresetId = presets[0].id;
+
+            persistPresetsToStorage();
+            applyPresetById(activePresetId, false);
+            showToast(`🗑️ 已刪除方案「${removedName}」`, 'info');
+        }
+
+        /**
+         * Restore initial 3 factory default presets
+         */
+        function restoreDefaultPresets() {
+            if (state.isRunning) {
+                pauseTimer();
+            }
+            presets = JSON.parse(JSON.stringify(INITIAL_DEFAULT_PRESETS));
+            activePresetId = presets[0].id;
+            persistPresetsToStorage();
+            applyPresetById(activePresetId, false);
+            showToast('↺ 已還原為系統初始的 3 個預設方案', 'info');
+        }
+
         function syncInputsFromConfig() {
+            document.getElementById('inputPresetName').value = config.name;
             document.getElementById('inputPrepare').value = config.prepare;
             document.getElementById('inputWork').value = config.work;
             document.getElementById('inputRest').value = config.rest;
@@ -1187,28 +1568,29 @@
             config[paramName] = Math.min(lim.max, Math.max(lim.min, config[paramName] + delta));
 
             syncInputsFromConfig();
-            highlightPresetCard(null, '自訂方案');
             resetWorkout();
         }
 
-        function onManualInputChange() {
-            if (state.isRunning) return;
-
+        function readAndClampInputsIntoConfig() {
             const clamp = (val, min, max, fallback) => {
                 const parsed = parseInt(val, 10);
                 if (isNaN(parsed)) return fallback;
                 return Math.min(max, Math.max(min, parsed));
             };
 
+            const rawName = document.getElementById('inputPresetName').value;
+            config.name    = rawName ? rawName : '自訂方案';
             config.prepare = clamp(document.getElementById('inputPrepare').value, 0, 300, 10);
             config.work    = clamp(document.getElementById('inputWork').value, 5, 600, 20);
             config.rest    = clamp(document.getElementById('inputRest').value, 0, 600, 10);
             config.rounds  = clamp(document.getElementById('inputRounds').value, 1, 50, 8);
             config.sets    = clamp(document.getElementById('inputSets').value, 1, 20, 1);
             config.setRest = clamp(document.getElementById('inputSetRest').value, 0, 600, 60);
+        }
 
-            syncInputsFromConfig();
-            highlightPresetCard(null, '自訂方案');
+        function onManualInputChange() {
+            if (state.isRunning) return;
+            readAndClampInputsIntoConfig();
             resetWorkout();
         }
 
@@ -1219,11 +1601,10 @@
 
         /**
          * ============================================================================
-         * 8. KEYBOARD SHORTCUTS & INITIALIZATION
+         * 9. KEYBOARD SHORTCUTS & INITIALIZATION
          * ============================================================================
          */
         window.addEventListener('keydown', (e) => {
-            // Do not trigger shortcuts if user is typing in an input field
             if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
             if (e.code === 'Space') {
@@ -1242,7 +1623,7 @@
         });
 
         window.onload = function () {
-            resetWorkout();
+            loadPresetsFromStorage();
         };
     </script>
 </body>
